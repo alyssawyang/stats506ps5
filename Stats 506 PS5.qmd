@@ -1,37 +1,53 @@
 ---
 title: "Stats 506 PS5"
 author: "Alyssa Yang"
-format: pdf
+format: html
 ---
 
-<!-- #| echo: false -->
 # Github repo link
 https://github.com/alyssawyang/stats506ps5
 
 # Problem 1: OOP Programming
 ## 1a
 ```{r}
-# Constructor
-rational <- setClass("rational",
-              slots = c(a = "integer",
-                        b = "integer"))
+# Make new rational class
+setClass("rational",
+    slots = list(
+      a = "numeric",
+      b = "numeric"
+    ),
+    validity = function(object) { # Validator
+      if (is.null(object@a)) {
+        stop("Rational must have a numerator")
+      }
+      if (object@b == 0) {
+        return("Denominator cannot be zero.")
+      }
+      return(TRUE)
+    }
+)
 ```
 
 ```{r}
-# Validator
-setValidity("rational", function(object) {
-  if (object@b == 0) {
-    stop("Denominator cannot be 0")
-  }
-  return(TRUE)
-})
+# Constructor
+rational <- function(a, b = 1) {
+  new("rational", a = a, b = b)
+}
 ```
 
 ```{r}
 # Show method
 setMethod("show", "rational",
   function(object) {
-    cat(paste0(object@a, "/", object@b, "\n"))
+    if (object@b == 1) {
+      print(object@a)
+    }
+    else if (object@a == 0) {
+      print(0)
+    }
+    else {
+      cat(paste0(object@a, "/", object@b, "\n"))
+    }
     return(invisible(object))
   }
 )
@@ -58,16 +74,18 @@ cppFunction("
 ```{r}
 # Simplify method
 setGeneric("simplify", 
-  function(object) {
+  function(object, ...) {
     standardGeneric("simplify")
   })
 
 setMethod("simplify", "rational",
-  function(object) {
+  function(object, print_result = TRUE) {
     gcd <- C_gcd(object@a, object@b)
     object@a <- object@a / gcd
     object@b <- object@b / gcd
-    show(object)
+    if (print_result) {
+      show(object)
+    }
     return(invisible(object))
   })
 ```
@@ -81,20 +99,12 @@ setGeneric("quotient",
 
 setMethod("quotient", "rational",
   function(object, digits = 4) {
-    digits <- tryCatch(
-      {
-        as.integer(digits)
-      },
-      warning = function(w) {
-        stop("Digits must be an integer.")
-      },
-      error = function(e) {
-        stop("Digits must be an integer.")
-      }
-    )
+    if (!is.numeric(digits) || digits != as.integer(digits) || digits < 0) {
+      stop("Digits must be a non-negative integer.")
+    }
     
     result <- object@a / object@b
-    print(format(result, digits = digits))
+    print(sprintf(paste0("%.", digits, "f"), result))
     return(invisible(result))
   })
 ```
@@ -107,7 +117,7 @@ setMethod("+", signature(e1 = "rational",
             lcm <- C_lcm(e1@b, e2@b)
             num1 <- (lcm / e1@b) * e1@a
             num2 <- (lcm / e2@b) * e2@a
-            return(rational(a = num1 + num2, b = lcm))
+            return(simplify(rational(a = num1 + num2, b = lcm), FALSE))
           })
 
 setMethod("-", signature(e1 = "rational",
@@ -116,19 +126,19 @@ setMethod("-", signature(e1 = "rational",
             lcm <- C_lcm(e1@b, e2@b)
             num1 <- (lcm / e1@b) * e1@a
             num2 <- (lcm / e2@b) * e2@a
-            return(rational(a = num1 - num2, b = lcm))
+            return(simplify(rational(a = num1 - num2, b = lcm), FALSE))
           })
 
 setMethod("*", signature(e1 = "rational",
                          e2 = "rational"),
           function(e1, e2) {
-            return(rational(a = e1@a * e2@a, b = e1@b * e2@b))
+            return(simplify(rational(a = e1@a * e2@a, b = e1@b * e2@b), FALSE))
           })
 
 setMethod("/", signature(e1 = "rational",
                          e2 = "rational"),
           function(e1, e2) {
-            return(rational(a = e1@a * e2@b, b = e1@b * e2@a))
+            return(simplify(rational(a = e1@a * e2@b, b = e1@b * e2@a), FALSE))
           })
 ```
 
@@ -164,6 +174,8 @@ simplify(r2)
 simplify(r3)
 ```
 
+
+## 1c
 ```{r}
 #| error: true
 # Check for no creation of 0's in denominator
@@ -177,10 +189,182 @@ t5 <- t3 / t4
 # Check for other malformed inputs
 t6 <- rational(a = "a", b = "b")
 t7 <- rational(a = "3", b = "4")
-t8 <- rational(a = 8.76, b = 1.23)
-t9 <- rational(a = 1)
+t9 <- rational(a = 2)
 t10 <- rational(b = 2)
+t11 <- rational()
 ```
+
+
+
+
+
+# Problem 2: plotly
+## 2a
+```{r}
+#| code-fold: true
+suppressMessages(library(dplyr))
+library(tidyr)
+library(stringr)
+library(ggplot2)
+suppressMessages(library(plotly))
+
+art_sales <- read.csv("df_for_ml_improved_new_market.csv")
+```
+
+```{r}
+#| code-fold: true
+# Collapse genre columns into one column
+art_sales_genres <- art_sales %>%
+  pivot_longer(cols = starts_with("Genre___"),
+               names_to = "genre",
+               values_to = "count")
+
+# Rename genre values and select relevant columns
+art_sales_genres <- art_sales_genres %>%
+  mutate(genre = str_remove(genre, "Genre___")) %>%
+  filter(count > 0) %>%
+  select(year, genre)
+
+# Calculate proportions of genre of sales across years
+genre_dist <- art_sales_genres %>%
+  group_by(year, genre) %>%
+  summarize(num_sales = n()) %>%
+  mutate(proportion = num_sales / sum(num_sales))
+
+# Plot genre distribution across years
+ggplot(genre_dist, aes(x = year, y = proportion, fill = genre)) +
+  geom_area(alpha = 0.75, size = 0.5, color = "white") +
+  labs(title = "Distribution of Genre of Sales Across Years",
+       x = "Year",
+       y = "Proportion of Sales")
+```
+
+
+## 2b
+```{r}
+#| code-fold: true
+# Collapse genre columns into one column
+art_sales_genres <- art_sales %>%
+  pivot_longer(cols = starts_with("Genre___"),
+               names_to = "genre",
+               values_to = "count")
+
+# Rename genre values and select relevant columns
+art_sales_genres <- art_sales_genres %>%
+  mutate(genre = str_remove(genre, "Genre___")) %>%
+  filter(count > 0) %>%
+  select(year, genre, price_usd)
+
+# Calculate average sales price by year and genre
+avg_price_genre <- art_sales_genres %>%
+  group_by(year, genre) %>%
+  summarize(avg_sales_price = mean(price_usd, na.rm = TRUE))
+```
+
+
+```{r}
+#| code-fold: true
+# Filter genre dataframe for each genre to plot
+others <- avg_price_genre %>%
+  filter(genre == "Others")
+
+painting <- avg_price_genre %>%
+  filter(genre == "Painting")
+
+photography <- avg_price_genre %>%
+  filter(genre == "Photography")
+
+print <- avg_price_genre %>%
+  filter(genre == "Print")
+
+sculpture <- avg_price_genre %>%
+  filter(genre == "Sculpture")
+```
+
+```{r}
+#| code-fold: true
+library(plotly)
+
+# Create the plot with both sales price and genre average lines
+p <- plot_ly() |>
+  add_markers(data = art_sales,
+              x = ~year, y = ~price_usd, 
+              name = "Sales Price", 
+              marker = list(opacity = 0.5, color = "gray")) |>
+  add_lines(data = art_sales,
+            x = ~year, y = ~fitted(loess(price_usd ~ year, data = art_sales)), 
+            name = "Trend line",
+            line = list(color = "red")) |>
+  add_markers(data = others,
+            x = ~year, y = ~avg_sales_price,
+            name = "Others", mode = "lines",
+            line = list(color = "orange"), marker = list(opacity = 0)) |>
+  add_markers(data = painting,
+            x = ~year, y = ~avg_sales_price,
+            name = "Painting", mode = "lines",
+            line = list(color = "yellow"), marker = list(opacity = 0)) |>
+  add_markers(data = photography,
+            x = ~year, y = ~avg_sales_price,
+            name = "Photography", mode = "lines",
+            line = list(color = "green"), marker = list(opacity = 0)) |>
+  add_markers(data = print,
+            x = ~year, y = ~avg_sales_price,
+            name = "Print", mode = "lines",
+            line = list(color = "blue"), marker = list(opacity = 0)) |>
+  add_markers(data = sculpture,
+            x = ~year, y = ~avg_sales_price,
+            name = "Sculpture", mode = "lines",
+            line = list(color = "purple"), marker = list(opacity = 0)) |>
+  layout(
+    title = "Change in Sales Price in USD Over Time",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Sales Price in USD", range = c(0, 100000)),
+    showlegend = TRUE
+  )
+```
+
+```{r}
+#| code-fold: true
+# Create menus to switch between overall trend and genres
+p |> layout(updatemenus = list(
+  list(
+    y = 0.95,
+    buttons = list(
+      list(method = "update",
+           args = list(list(visible = list(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE))),
+           label = "All lines"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE))),
+           label = "Overall trend"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE))),
+           label = "All genres"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE))),
+           label = "Others"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE))),
+           label = "Painting"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE))),
+           label = "Photography"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE))),
+           label = "Print"),
+      list(method = "update",
+           args = list(list(visible = list(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE))),
+           label = "Sculpture")
+    )
+  )
+))
+```
+
+
+
+
+
+# Problem 3: 
+## 3a
 
 
 
