@@ -1,0 +1,198 @@
+---
+title: "Stats 506 PS5"
+author: "Alyssa Yang"
+format: pdf
+---
+
+<!-- #| echo: false -->
+# Github repo link
+https://github.com/alyssawyang/stats506ps5
+
+# Problem 1: OOP Programming
+## 1a
+```{r}
+# Constructor
+rational <- setClass("rational",
+              slots = c(a = "integer",
+                        b = "integer"))
+```
+
+```{r}
+# Validator
+setValidity("rational", function(object) {
+  if (object@b == 0) {
+    stop("Denominator cannot be 0")
+  }
+  return(TRUE)
+})
+```
+
+```{r}
+# Show method
+setMethod("show", "rational",
+  function(object) {
+    cat(paste0(object@a, "/", object@b, "\n"))
+    return(invisible(object))
+  }
+)
+```
+
+```{r}
+# GCD and LCM in RCpp
+library(Rcpp)
+
+cppFunction("
+  #include <numeric>`
+  int C_gcd(int a, int b) {
+    return std::gcd(a, b);
+  }")
+
+cppFunction("
+  #include <numeric>
+  int C_lcm(int a, int b) {
+    return std::lcm(a, b);
+  }")
+```
+
+
+```{r}
+# Simplify method
+setGeneric("simplify", 
+  function(object) {
+    standardGeneric("simplify")
+  })
+
+setMethod("simplify", "rational",
+  function(object) {
+    gcd <- C_gcd(object@a, object@b)
+    object@a <- object@a / gcd
+    object@b <- object@b / gcd
+    show(object)
+    return(invisible(object))
+  })
+```
+
+```{r}
+# Quotient method
+setGeneric("quotient",
+  function(object, digits = 4) {
+    standardGeneric("quotient")
+  })
+
+setMethod("quotient", "rational",
+  function(object, digits = 4) {
+    digits <- tryCatch(
+      {
+        as.integer(digits)
+      },
+      warning = function(w) {
+        stop("Digits must be an integer.")
+      },
+      error = function(e) {
+        stop("Digits must be an integer.")
+      }
+    )
+    
+    result <- object@a / object@b
+    print(format(result, digits = digits))
+    return(invisible(result))
+  })
+```
+
+```{r}
+# +, -, *, /
+setMethod("+", signature(e1 = "rational",
+                         e2 = "rational"),
+          function(e1, e2) {
+            lcm <- C_lcm(e1@b, e2@b)
+            num1 <- (lcm / e1@b) * e1@a
+            num2 <- (lcm / e2@b) * e2@a
+            return(rational(a = num1 + num2, b = lcm))
+          })
+
+setMethod("-", signature(e1 = "rational",
+                         e2 = "rational"),
+          function(e1, e2) {
+            lcm <- C_lcm(e1@b, e2@b)
+            num1 <- (lcm / e1@b) * e1@a
+            num2 <- (lcm / e2@b) * e2@a
+            return(rational(a = num1 - num2, b = lcm))
+          })
+
+setMethod("*", signature(e1 = "rational",
+                         e2 = "rational"),
+          function(e1, e2) {
+            return(rational(a = e1@a * e2@a, b = e1@b * e2@b))
+          })
+
+setMethod("/", signature(e1 = "rational",
+                         e2 = "rational"),
+          function(e1, e2) {
+            return(rational(a = e1@a * e2@b, b = e1@b * e2@a))
+          })
+```
+
+
+## 1b
+```{r}
+r1 <- rational(a = 24, b = 6)
+r2 <- rational(a = 7, b = 230)
+r3 <- rational(a = 0, b = 4)
+```
+
+```{r}
+#| error: true
+r1
+r3
+r1 + r2
+r1 - r2
+r1 * r2
+r1 / r2
+r1 + r3
+r1 * r3
+r2 / r3
+quotient(r1)
+quotient(r2)
+quotient(r2, digits = 3)
+quotient(r2, digits = 3.14)
+quotient(r2, digits = "avocado")
+q2 <- quotient(r2, digits = 3)
+q2
+quotient(r3)
+simplify(r1)
+simplify(r2)
+simplify(r3)
+```
+
+```{r}
+#| error: true
+# Check for no creation of 0's in denominator
+t1 <- rational(a = 2, b = 0)
+t2 <- rational(a = 0, b = 0)
+
+t3 <- rational(a = 1, b = 2)
+t4 <- rational(a = 0, b = 4)
+t5 <- t3 / t4
+
+# Check for other malformed inputs
+t6 <- rational(a = "a", b = "b")
+t7 <- rational(a = "3", b = "4")
+t8 <- rational(a = 8.76, b = 1.23)
+t9 <- rational(a = 1)
+t10 <- rational(b = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
