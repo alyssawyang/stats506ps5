@@ -1,7 +1,9 @@
 ---
 title: "Stats 506 PS5"
 author: "Alyssa Yang"
-format: html
+format:
+    html: 
+       embed-resources: true
 ---
 
 # Github repo link
@@ -365,7 +367,62 @@ p |> layout(updatemenus = list(
 
 # Problem 3: 
 ## 3a
+```{r}
+suppressMessages(library(data.table))
+library(nycflights13)
+flights <- data.table(flights)
+airports <- data.table(airports)
+planes <- data.table(planes)
+```
 
+```{r}
+# Departure delays
+flights_dep <- merge(flights[, faa := origin],
+                     airports,
+                     by = "faa",
+                     all.x = TRUE)
+
+flights_dep[, .(mean_delay = mean(dep_delay, na.rm = TRUE),
+                median_delay = median(dep_delay, na.rm = TRUE),
+                num_flights = .N),
+            by = name] |>
+  _[num_flights >= 10] |>
+  _[,!"num_flights"] |>
+  _[order(mean_delay, decreasing = TRUE)]
+```
+
+```{r}
+# Arrival delays
+flights_arr <- merge(flights[, faa := dest],
+                     airports,
+                     by = "faa",
+                     all.x = TRUE)
+
+flights_arr[, .(name = ifelse(is.na(name[1]), faa[1], name[1]),
+                mean_delay = mean(arr_delay, na.rm = TRUE),
+                med_delay = median(arr_delay, na.rm = TRUE),
+                num_flights = .N),
+            by = faa] |>
+  _[num_flights >= 10] |>
+  _[, !c("faa", "num_flights")] |>
+  _[order(mean_delay, decreasing = TRUE)] |>
+  print(x = _, nrows = 110)
+```
+
+
+## 3b
+```{r}
+flights_planes <- merge(flights,
+                        planes,
+                        by = "tailnum",
+                        all.x = TRUE)
+
+flights_planes[, .(avg_mph = mean(distance/(air_time/60)),
+                   num_flights = .N),
+               by = model] |>
+  _[order(avg_mph, decreasing = TRUE)] |>
+  _[head(1)]
+```
 
 
 
